@@ -3,8 +3,8 @@
 **FloodFusion** is an interactive Google Earth Engine (GEE) application for mapping flood extent.  
 It uses a data fusion approach that combines Sentinel-1 (SAR) and Sentinel-2 (optical) satellite imagery, classifying the data with a Random Forest algorithm to identify and display flooded pixels.
 
-- **GEE App Link:** [**Click here to open the FloodFusion Application**](https://your-gee-app-url-here.com)  
-- **Demo Training Data:** [**Sample Training Points (GEE Asset)**](https://earthengine.google.com/asset/users/your_username/your_sample_asset_name)
+- **GEE App Link:** [**Click here to open the FloodFusion Application**](https://ee-kanil2310.projects.earthengine.app/view/flood-mapping)  
+- **Demo Training Data:** [**Sample Training Points (GEE Asset)**](https://ee-kanil2310.projects.earthengine.app/view/flood-mapping)
 
 ---
 
