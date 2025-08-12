@@ -4,7 +4,7 @@
 It uses a data fusion approach that combines Sentinel-1 (SAR) and Sentinel-2 (optical) satellite imagery, classifying the data with a Random Forest algorithm to identify and display flooded pixels.
 
 - **GEE App Link:** [**Click here to open the FloodFusion Application**](https://ee-kanil2310.projects.earthengine.app/view/flood-mapping)  
-- **Demo Training Data:** [**Sample Training Points (GEE Asset)**](https://ee-kanil2310.projects.earthengine.app/view/flood-mapping)
+- **Demo Training Data:** [**users/srijal2023/Melamchi_points_water**]
 
 ---
 
