@@ -6,12 +6,7 @@
  * fused Sentinel-1 and Sentinel-2 approach with a Random Forest classifier.
  * This version extracts and displays only the flooded pixels.
  *
- * Instructions:
- * 1. Enter the GEE Asset ID for your FeatureCollection of training points.
- * 2. Click "Fetch Columns" and select the property that contains your class labels.
- * 3. Your class labels MUST BE INTEGERS (e.g., 0 for Non-Flood, 1 for Flood/Water).
- * 4. Ensure your training data asset has public read permissions.
- * 5. Use the UI to define an AOI, set other parameters, and run the analysis.
+ * NOTE: This code assumes you have imported the 'Nepal' asset in your Imports tab.
  *
  ******************************************************************************/
 
@@ -33,12 +28,22 @@ var CONFIG = {
   DEFAULT_TRAINING_SPLIT: 0.7, // 70% for training, 30% for validation
   DEFAULT_SLOPE_THRESHOLD: 5, // degrees
   DEFAULT_CONNECTIVITY_THRESHOLD: 8, // pixels
+  
+  // --- USER-DEFINED DEFAULTS ---
+  DEFAULT_TRAINING_ASSET: 'users/srijal2023/Melamchi_points_water', // <-- Set your default asset
+  DEFAULT_CLASS_COLUMN: 'Planet_flo', // <-- Set your default class property name
+  // -----------------------------
 
   // Visualization parameters
-  VIS_S1: {
+  VIS_S1_VV: {
     min: -25,
     max: 0,
     bands: ['VV_Filtered']
+  },
+  VIS_S1_FALSE_COLOR: {
+    min: [-20, -25, 0.5],
+    max: [0, -5, 5],
+    bands: ['VV_Filtered', 'VH_Filtered', 'Ratio_Filtered'] // VV, VH, VV/VH Ratio
   },
   VIS_S2_RGB: {
     min: 0.0,
@@ -224,6 +229,8 @@ function clearAndDraw(shape) {
   drawingTools.setShape(shape);
   drawingTools.draw();
 }
+
+// --- MODIFIED DRAW BUTTONS PANEL to include Default AOI ---
 var drawButtons = ui.Panel({
   widgets: [
     ui.Button({
@@ -243,6 +250,14 @@ var drawButtons = ui.Panel({
       style: {
         stretch: 'horizontal'
       }
+    }),
+    ui.Button({ 
+      label: '📍 Default AOI',
+      onClick: loadDefaultAoi,
+      style: {
+        stretch: 'horizontal',
+        backgroundColor: '#D6EAF8' 
+      }
     })
   ],
   layout: ui.Panel.Layout.flow('horizontal'),
@@ -251,6 +266,7 @@ var drawButtons = ui.Panel({
   }
 });
 mainPanel.add(drawButtons);
+// --- END MODIFIED PANEL ---
 
 // --- Section 2: Classification Parameters ---
 mainPanel.add(ui.Label({
@@ -263,7 +279,7 @@ mainPanel.add(ui.Label({
 }));
 mainPanel.add(ui.Label('Training Data (Shapefile GEE Asset ID):'));
 var trainingAssetBox = ui.Textbox({
-  placeholder: 'users/username/asset_name',
+  value: CONFIG.DEFAULT_TRAINING_ASSET, // Use the default value
   style: {
     width: '95%'
   }
@@ -440,6 +456,58 @@ function resetApp(clearAoi) {
 }
 
 /**
+ * Loads and displays the default AOI from the Nepal asset.
+ * This function uses .evaluate() to handle the computed server-side geometry.
+ */
+function loadDefaultAoi() {
+  // Check if the global 'Nepal' asset is available
+  if (typeof Nepal === 'undefined') {
+    handleError('The "Nepal" asset is not imported. Please add it to your Imports section.');
+    return;
+  }
+  
+  resetApp(true); // Reset the map and clear any existing AOI geometry
+  drawingTools.stop();
+  statusLabel.setValue('Status: Loading default AOI (Melamchi)...').style().set('color', 'orange');
+
+  // 1. Define the computed Earth Engine Geometry object (server-side)
+  // FIX: Using the corrected column name 'GaPa_NaPa'
+  var filteredFeatures = Nepal.filter(ee.Filter.eq('GaPa_NaPa', 'Melamchi'));
+  
+  // Use ee.Algorithms.If to check if the filtered collection is empty, preventing a 'null' error
+  var defaultAoiEE = ee.Algorithms.If(
+    filteredFeatures.size().gt(0),
+    filteredFeatures.geometry().bounds(),
+    ee.Geometry.Point(85.58, 27.83).buffer(1) // Fallback to a small point near Melamchi
+  );
+  defaultAoiEE = ee.Geometry(defaultAoiEE); // Cast the result
+
+  // 2. Compute the geometry on the server and use the result client-side.
+  defaultAoiEE.evaluate(function(geojson, error) {
+    // Note: The check for 'geojson.coordinates' ensures the default AOI was actually found,
+    // otherwise, the fallback geometry is used.
+    if (error || !geojson.coordinates) {
+      handleError('Could not find Melamchi in the asset. Default point used. Check "GaPa_NaPa" value.');
+    }
+    
+    // Get the geometry layer from the drawing tools.
+    var geometryLayer = drawingTools.layers().get(0);
+    
+    // Reset the geometries array in the layer.
+    geometryLayer.geometries().reset();
+    
+    // Add the new client-side GeoJSON object to the layer.
+    geometryLayer.geometries().add(geojson);
+    
+    // Center the map on the new AOI (using the server-side object for centering).
+    map.centerObject(defaultAoiEE, 12);
+
+    statusLabel.setValue('Status: Default AOI (Melamchi) loaded. Ready to run.').style().set('color', 'blue');
+  });
+}
+
+
+/**
  * Fetches property names from the user-provided asset.
  */
 function fetchAndPopulateColumns() {
@@ -474,10 +542,20 @@ function fetchAndPopulateColumns() {
       var userNames = names.filter(function(name) {
         return name !== 'system:index';
       });
+      
       columnSelectDropdown.items().reset(userNames);
       columnSelectDropdown.setDisabled(false);
-      columnSelectDropdown.setPlaceholder('Select a column');
-      statusLabel.setValue('Status: Columns fetched. Select class property.').style().set('color', 'blue');
+      
+      // Check if the default column exists in the list and set it
+      var defaultColumnExists = userNames.indexOf(CONFIG.DEFAULT_CLASS_COLUMN) !== -1;
+      
+      if (defaultColumnExists) {
+        columnSelectDropdown.setValue(CONFIG.DEFAULT_CLASS_COLUMN);
+        statusLabel.setValue('Status: Columns fetched. Default class selected.').style().set('color', 'blue');
+      } else {
+        columnSelectDropdown.setPlaceholder('Select a column');
+        statusLabel.setValue('Status: Columns fetched. Select class property.').style().set('color', 'blue');
+      }
     }
     fetchColumnsButton.setDisabled(false);
   });
@@ -490,7 +568,6 @@ function fetchAndPopulateColumns() {
 function runAnalysis() {
   var aoi = drawingTools.layers().get(0).getEeObject();
   
-  // [UPDATED] Added a specific check for a missing AOI.
   if (!aoi) {
     handleError('Please draw an Area of Interest (AOI) first.');
     return;
@@ -601,12 +678,13 @@ function runAnalysis() {
       ));
 
       var finalClassification = classified.where(floodPixels, finalFloodPixels)
-                                          .updateMask(slopeMask);
+                                         .updateMask(slopeMask);
       
       var floodLayer = finalClassification.eq(1).selfMask();
-                                          
+      
+      // Add result layers to map
       map.addLayer(s2_image, CONFIG.VIS_S2_RGB, 'Sentinel-2 RGB', false);
-      map.addLayer(s1_image, CONFIG.VIS_S1, 'Sentinel-1 VV', false);
+      map.addLayer(s1_image.select(['VV_Filtered', 'VH_Filtered', 'Ratio_Filtered']), CONFIG.VIS_S1_FALSE_COLOR, 'Sentinel-1 False Color', true);
       
       map.addLayer(floodLayer, CONFIG.VIS_CLASSIFICATION, 'Flooded Area');
       buildLegend('Legend', CONFIG.LEGEND_INFO);
@@ -621,7 +699,7 @@ function runAnalysis() {
 }
 
 /**
- * [UPDATED] Displays final results and accuracy metrics.
+ * Displays final results and accuracy metrics.
  */
 function displayResults(confusionMatrix, aoi, finalClassification) {
   
@@ -658,7 +736,6 @@ function displayResults(confusionMatrix, aoi, finalClassification) {
     resultsPanel.add(ui.Label('Mapped Flood Area: ' + floodHa.toFixed(2) + ' ha'));
     areaPanelLabel.setValue('Flooded Area: ' + floodHa.toFixed(2) + ' ha');
 
-    // [UPDATED] Status label changed to be more accurate.
     statusLabel.setValue('Status: Finalizing results...').style().set('color', 'orange');
     
     confusionMatrix.accuracy().evaluate(function(accuracy, error) {
@@ -669,6 +746,15 @@ function displayResults(confusionMatrix, aoi, finalClassification) {
       
       resultsPanel.add(ui.Label('Accuracy Assessment', { fontWeight: 'bold', margin: '8px 0 4px 0' }));
       resultsPanel.add(ui.Label('Overall Accuracy: ' + (accuracy * 100).toFixed(2) + '%'));
+      
+      // Calculate and display Kappa Coefficient
+      confusionMatrix.kappa().evaluate(function(kappa, kappaError) {
+        if (!kappaError) {
+          resultsPanel.add(ui.Label('Kappa Coefficient: ' + kappa.toFixed(3)));
+        } else {
+          print('Kappa Error:', kappaError);
+        }
+      });
       
       var floodDownloadLayer = finalClassification.eq(1).selfMask();
       floodDownloadLayer.getDownloadURL({
@@ -702,7 +788,6 @@ function displayResults(confusionMatrix, aoi, finalClassification) {
             map.layers().remove(layer);
           });
           
-          // [UPDATED] Ensures the final AOI is displayed as an outline.
           var finalAoiOutline = ee.Image().byte().paint({
             featureCollection: ee.FeatureCollection(aoi),
             color: 1,
