@@ -684,7 +684,7 @@ function runAnalysis() {
       
       // Add result layers to map
       map.addLayer(s2_image, CONFIG.VIS_S2_RGB, 'Sentinel-2 RGB', false);
-      map.addLayer(s1_image.select(['VV_Filtered', 'VH_Filtered', 'Ratio_Filtered']), CONFIG.VIS_S1_FALSE_COLOR, 'Sentinel-1 False Color', true);
+      map.addLayer(s1_image.select(['VV_Filtered', 'VH_Filtered', 'Ratio_Filtered']), CONFIG.VIS_S1_FALSE_COLOR, 'Sentinel-1 False Color', false);
       
       map.addLayer(floodLayer, CONFIG.VIS_CLASSIFICATION, 'Flooded Area');
       buildLegend('Legend', CONFIG.LEGEND_INFO);
